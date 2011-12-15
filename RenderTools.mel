@@ -1,0 +1,1365 @@
+/*
+=================================
+RenderTools (2011)
+by Sil Bulterman (www.silami.tumblr.com)
+ 
+All Rights Reserved.
+ 
+Your feedback is always appreciated - if you find the script useful or if you have questions, comments, suggestions, requests, bug-reports, if you created an updated version, or to check for updates please contact me at:
+silbulterman@gmail.com
+==================================
+DISCLAIMER: This code is in early alpha stage, so at your own risk. I take no responsibility for any crashes or data loss whatsoever.
+==================================
+INSTALLATION: Copy the script into your Maya script-directory, source in the code, and start it with the "RenderTools;" command. To make a shelfbutton, middle-mousebutton drag "source RenderTools; RenderTools;" to the shelf.
+==================================
+RELEASE NOTES:
+v0.2:	Added options for creating renderlayers, setting up renderpasses, and several easy tools.
+v0.2.1: Bug fix that appeared in Maya 2012 due to the new RenderLayer Node system.
+
+*/
+
+
+global proc RenderTools()
+{
+renderTools;
+}
+
+global proc renderTools()
+{
+    if ( `window -exists toolWindow` )
+    {
+	deleteUI toolWindow;
+    }
+
+	if (!(`pluginInfo -q -l Mayatomr`))
+	{
+		loadPlugin Mayatomr;
+	}
+
+//////////////////
+// interface maken
+
+	window -rtf 1 -t "RenderTools Beta 0.2.1" -mnb 1 -mxb 1 -w 332 -h 500 toolWindow;
+	scrollLayout -w 332 -h 500 RTScrollLayout;
+		columnLayout -adjustableColumn 1 -rowSpacing 0 KOTCColumnLayout;
+			frameLayout -cll true -cl false -l "SHADERS" -bs etchedIn ShaderFrame;
+				frameLayout -cll true -cl false -l "Assign Shaders to All" -bs etchedIn ShaderToAllFrame;
+					gridLayout -cwh 320 24 -nrc 3 1 -ag 5;
+						//text -l "______________Assign Shaders to All______________";
+						button -c "makeBlackMall" 	-label "BlackMatte to All";
+						button -c "makeAOSall" 	-label "AO Shader to All";
+						button -c "makePPSall" 	-label "PointPosition Shader to All";
+					//text -l "____________________Settings____________________";
+					//button -c "renderSetup"	-label "Setup Rendersettings";
+					setParent ..;
+				setParent ..;
+				frameLayout -cll true -cl false -l "Assign Shaders to Selection" -bs etchedIn AssignToSelectionFrame;
+					gridLayout -cwh 320 24 -nrc 1 1 -ag 5;
+					//text -l "___________Assign Shaders to Selection___________";
+						button -c "makeBlackM" 	-label "BlackMatte";
+					setParent ..;
+					gridLayout -cwh 160 24 -nrc 2 2 -ag 5;
+						button -c "makeRedM" 	-label "RedMatte";
+						button -c "makeGreenM" 	-label "GreenMatte";
+						button -c "makeBlueM" 	-label "BlueMatte";
+						button -c "makeAlphaM" 	-label "AlphaMatte";
+					setParent ..;
+				//setParent ..;
+				//gridLayout -cwh 320 24 -nrc 9 1 -ag 5;
+				//columnLayout -rowSpacing 0 -adjustableColumn 1;
+					gridLayout -cwh 320 24 -nrc 2 1 -ag 5;
+						button -c "makeAOS" 	-label "Ambient Occlusion Shader";
+						button -c "makeDfMIAXP"	-label "Default Grey Mia X Passes";				
+					setParent ..;
+				setParent ..;
+				frameLayout -cll true -cl false -l "Setup Special Shaders" -bs etchedIn SpecialShaderFrame;
+					gridLayout -cwh 320 24 -nrc 2 1 -ag 5;
+					//text -l "______________Setup Special Shaders______________";
+						button -c "makePPS" 	-label "PointPosition Shader";
+						button -c "makeTwoSidedShader" 	-label "Create and Assign Two Sided Shader";
+					setParent ..;
+				setParent ..;
+		setParent ..;
+		frameLayout -cll true -cl true -l "Easy Tools" -bs etchedIn EasyTools;
+			columnLayout -rowSpacing 5 -adjustableColumn 1;
+				gridLayout -cwh 320 24 -nrc 4 1 -ag 5;
+					button -c "selectAll" -label "Select All";
+					button -c "dfLamb" -label "Default Lambert to All";
+					button -c "dfMIAXtoAll" -label "Grey MiaX Passes to All";
+					button -c "pastedPrefix" -label "Remove Pasted_ Prefix";
+				setParent ..;
+			setParent ..;
+		setParent ..;
+		frameLayout -cll true -cl true-l "RenderLayers" -bs etchedIn RLFrame;
+			gridLayout -cwh 320 24 -nrc 2 1 -ag 5;
+				button -c "makeRLAOAll"	-label "Create AO Layer";
+				button -c "makeRLPPAll"	-label "Create PointPosition Layer";
+			setParent ..;
+		setParent ..;
+		frameLayout -cll true -cl true-l "SETTINGS" -bs etchedIn RenderFrame;
+			gridLayout -cwh 320 24 -nrc 2 1 -ag 5;
+				button -c "renderSetup"	-label "Set Up Rendersettings";
+				button -c "addMasterPasses"	-label "Set Up Renderpasses for MasterLayer";
+				button -c "lensShaderGamma"	-label "Set Lens Shader Gamma to 1";
+			setParent ..;
+		setParent ..;
+	setParent ..;
+	text -l "RenderTools Beta by Sil Bulterman";
+
+	showWindow;
+
+}
+
+    
+//////////////////
+//Processes to create shaders
+
+global proc makeBlackM()
+{
+    
+    $createBlackMatte = 1;
+    string $currentSelection[] = `ls -sl`;
+    string $presentShaders[] = `ls -mat`;
+
+    for ($blackMatteNode in $presentShaders)
+    {
+        
+        if ($blackMatteNode == "BlackMatte")
+            $createBlackMatte = 0;
+    }
+    switch ($createBlackMatte)
+    {
+        
+        case 0:
+            print "BlackMatte already exists\n";
+            break;
+            
+        case 1:
+			shadingNode -asShader surfaceShader -n "BlackMatte";
+			sets -renderable true -noSurfaceShader true -empty -name blackMatteSG;
+			connectAttr -f BlackMatte.outColor blackMatteSG.surfaceShader;
+			setAttr "BlackMatte.outColor" -type double3 0 0 0;
+			setAttr "BlackMatte.outMatteOpacity" -type double3 0 0 0;
+	    
+            break;
+    }
+    
+    pickWalk -d down;
+    sets -edit -forceElement blackMatteSG $currentSelection;
+    
+}    
+    
+global proc makeRedM()
+{
+    
+    $createRedMatte = 1;
+    string $currentSelection[] = `ls -sl`;
+    string $presentShaders[] = `ls -mat`;
+    
+    for ($redMatteNode in $presentShaders)
+    {
+        
+        if ($redMatteNode == "RedMatte")
+            $createRedMatte = 0;
+    }
+    switch ($createRedMatte)
+    {
+    
+        case 0:
+	    print "RedMatte already exists\n";
+	    break;
+        
+        case 1:
+		shadingNode -asShader surfaceShader -n "RedMatte";
+		sets -renderable true -noSurfaceShader true -empty -name redMatteSG;
+		connectAttr -f RedMatte.outColor redMatteSG.surfaceShader;
+		setAttr "RedMatte.outColor" -type double3 1 0 0;
+		setAttr "RedMatte.outMatteOpacity" -type double3 0 0 0;
+    
+	    break;
+    }
+    
+    pickWalk -d down;
+    sets -edit -forceElement redMatteSG $currentSelection;
+    
+}    
+    
+global proc makeGreenM()
+{
+    
+    $createGreenMatte = 1;
+    string $currentSelection[] = `ls -sl`;
+    string $presentShaders[] = `ls -mat`;    
+    
+    for ($greenMatteNode in $presentShaders)
+    {
+        
+        if ($greenMatteNode == "GreenMatte")
+            $createGreenMatte = 0;
+    }
+    switch ($createGreenMatte)
+    {
+	
+	case 0:
+	    print "GreenMatte already exists\n";
+	    break;
+	    
+	case 1:
+	    shadingNode -asShader surfaceShader -n "GreenMatte";
+	    sets -renderable true -noSurfaceShader true -empty -name greenMatteSG;
+	    connectAttr -f GreenMatte.outColor greenMatteSG.surfaceShader;
+	    setAttr "GreenMatte.outColor" -type double3 0 1 0;
+	    setAttr "GreenMatte.outMatteOpacity" -type double3 0 0 0;
+	
+	    break;
+    }
+    
+    pickWalk -d down;
+    sets -edit -forceElement greenMatteSG $currentSelection;
+}   
+    
+global proc makeBlueM()
+{
+    
+    $createBlueMatte = 1;
+    string $currentSelection[] = `ls -sl`;
+    string $presentShaders[] = `ls -mat`;
+    
+    for ($blueMatteNode in $presentShaders)
+    {
+        
+        if ($blueMatteNode == "BlueMatte")
+            $createBlueMatte = 0;
+    }
+    switch ($createBlueMatte)
+    {
+	
+	case 0:
+	    print "BlueMatte already exists\n";
+	    break;
+	    
+	case 1:
+	    shadingNode -asShader surfaceShader -n "BlueMatte";
+	    sets -renderable true -noSurfaceShader true -empty -name blueMatteSG;
+	    connectAttr -f BlueMatte.outColor blueMatteSG.surfaceShader;
+	    setAttr "BlueMatte.outColor" -type double3 0 0 1;
+	    setAttr "BlueMatte.outMatteOpacity" -type double3 0 0 0;
+	
+	    break;
+    }
+    
+    pickWalk -d down;
+    sets -edit -forceElement blueMatteSG $currentSelection;
+}    
+    
+global proc makeAlphaM()
+{
+    
+    $createAlphaMatte = 1;
+    string $currentSelection[] = `ls -sl`;
+    string $presentShaders[] = `ls -mat`;
+    
+    for ($alphaMatteNode in $presentShaders)
+    {
+        
+        if ($alphaMatteNode == "AlphaMatte")
+            $createAlphaMatte = 0;
+    }
+        switch ($createAlphaMatte)
+    {
+	
+	case 0:
+	    print "AlphaMatte already exists\n";
+	    break;
+	    
+	case 1:
+	    shadingNode -asShader surfaceShader -n "AlphaMatte";
+	    sets -renderable true -noSurfaceShader true -empty -name alphaMatteSG;
+	    connectAttr -f AlphaMatte.outColor alphaMatteSG.surfaceShader;
+	    setAttr "AlphaMatte.outColor" -type double3 0 0 0;
+	    setAttr "AlphaMatte.outMatteOpacity" -type double3 1 1 1;
+	
+	    break;
+    }
+    
+    pickWalk -d down;
+    sets -edit -forceElement alphaMatteSG $currentSelection;    
+}   
+
+global proc makeDfMIAXP()
+{
+	
+	$createDfMiax = 1;
+    string $currentSelection[] = `ls -sl`;
+    string $presentShaders[] = `ls -mat`;
+    
+    for ($dfMiaXNode in $presentShaders)
+    {
+        
+        if ($dfMiaXNode == "default_MiaX_Passes")
+            $createDfMiax = 0;
+    }
+        switch ($createDfMiax)
+    {
+	
+	case 0:
+	    print "default_MiaX_Passes already exists\n";
+	    break;
+	    
+	case 1:
+		shadingNode -asShader mia_material_x_passes -n "default_MiaX_Passes";
+		sets -renderable true -noSurfaceShader true -empty -name default_miaXSG;
+		
+		connectAttr default_MiaX_Passes.message default_miaXSG.miMaterialShader;
+		connectAttr default_MiaX_Passes.message default_miaXSG.miPhotonShader;
+		connectAttr default_MiaX_Passes.message default_miaXSG.miShadowShader;
+		
+		setAttr "default_MiaX_Passes.reflectivity" 0;
+		setAttr "default_MiaX_Passes.diffuse" -type double3 0.5 0.5 0.5 ;
+	   	
+	    break;
+    }
+    
+    pickWalk -d down;
+    sets -edit -forceElement default_miaXSG $currentSelection;
+
+}
+
+global proc makeAOS()
+{
+	
+    $createAO = 1;
+    string $currentSelection[] = `ls -sl`;
+    string $presentShaders[] = `ls -mat`;
+    
+    for ($aoNode in $presentShaders)
+    {
+        
+        if ($aoNode == "AO")
+            $createAO = 0;
+    }
+        switch ($createAO)
+    {
+	
+	case 0:
+	    print "AO Shader already exists\n";
+	    break;
+	    
+	case 1:
+	    shadingNode -asShader surfaceShader -n "AO";
+	    
+	    shadingNode -asTexture mib_amb_occlusion -n "renderLayerAO";
+	    
+	    sets -renderable true -noSurfaceShader true -empty -name aoSG;
+	    connectAttr -f AO.outColor aoSG.surfaceShader;
+	    connectAttr -force renderLayerAO.outValue AO.outColor;
+	    
+	    setAttr "renderLayerAO.samples" 128;
+	    setAttr "renderLayerAO.max_distance" 100;
+	
+	    break;
+    }
+    
+    pickWalk -d down;
+    sets -edit -forceElement aoSG $currentSelection;    
+} 
+ 
+global proc makePPS()
+{
+    
+    $createPointPosition = 1;
+    string $currentSelection[] = `ls -sl`;
+    string $presentShaders[] = `ls -mat`;
+    
+    for ($ppNode in $presentShaders)
+    {
+        
+        if ($ppNode == "PointPosition")
+            $createPointPosition = 0;
+    }
+    switch ($createPointPosition)
+    {
+	
+	case 0:
+	    print "Point Position Shader already exists\n";
+	    break;
+	    
+	case 1:
+	    shadingNode -asShader surfaceShader -n "PointPosition";
+	    shadingNode -asUtility samplerInfo -n "ppSamplerInfo";
+	    sets -renderable true -noSurfaceShader true -empty -name pointPositionSG;
+	    connectAttr -f PointPosition.outColor pointPositionSG.surfaceShader;
+	    connectAttr -f ppSamplerInfo.pointWorld PointPosition.outColor;
+	    
+	    break;
+    }
+    
+    pickWalk -d down;
+    sets -edit -forceElement pointPositionSG $currentSelection;    
+    
+}
+
+
+//not fully functional twosidedshader process
+global proc makeTwoSidedShader()
+{
+
+    $createTwoSided = 1;
+    string $currentSelection[] = `ls -sl`;
+	string $presentShaders[] = `ls -mat`;
+	
+	for ($tsNode in $presentShaders)
+    {
+        if ($tsNode == "tsSurface")
+            $createTwoSided = 0;
+    }
+    
+	switch ($createTwoSided)
+    {
+        
+        case 0:
+            print "Two Sided Shader Network already exists\n";
+            break;
+            
+        case 1:
+	    	//create nodes
+			shadingNode -asShader surfaceShader -n "tsSurface";
+			shadingNode -asShader mia_material_x_passes -n "tsSide1";
+			shadingNode -asShader mia_material_x_passes -n "tsSide2";
+			shadingNode -asUtility samplerInfo -n "tsSamplerInfo";
+			shadingNode -asUtility condition -n "tsCondition";
+			
+			sets -renderable true -noSurfaceShader true -empty -name "twoSidedSG";
+			
+			connectAttr -f tsSurface.outColor twoSidedSG.surfaceShader;
+			connectAttr -f tsCondition.outColor tsSurface.outColor;
+			connectAttr -f tsSamplerInfo.flippedNormal tsCondition.firstTerm;
+			connectAttr -f tsSide1.result tsCondition.colorIfTrue;
+			connectAttr -f tsSide2.result tsCondition.colorIfFalse;
+			
+			//set mia mat colors
+			setAttr tsSide1.diffuse -type double3 0 0 1;
+			setAttr tsSide2.diffuse -type double3 1 0 0;
+	    
+			break;
+    }
+
+    pickWalk -d down;
+    sets -edit -forceElement twoSidedSG $currentSelection;
+	
+}
+
+/*
+global proc makeTwoSidedShader()
+{
+
+    $createPointPosition = 1;
+    string $currentSelection[] = `ls -sl`;
+	int $i;
+	$iAfter = $i-1
+	
+	//create nodes
+	shadingNode -asShader surfaceShader -n ("ts"+$i+"Surface");
+	shadingNode -asShader mia_material_x_passes -n ("ts"+$i+"Side1");
+	shadingNode -asShader mia_material_x_passes -n ("ts"+$i+"Side2");
+	shadingNode -asUtility samplerInfo -n ("tsSamplerInfo"+$i);
+	shadingNode -asUtility condition -n ("tsCondition"+$i);
+	
+	sets -renderable true -noSurfaceShader true -empty -name ("twoSided"+$i+"SG");
+	
+	connectAttr -f ("ts"+$i+"Surface.outColor") ("twoSided"+$i+"SG.surfaceShader");
+    connectAttr -f ("tsCondition"+$i+".outColor") ("ts"+$i+"Surface.outColor");
+	connectAttr -f ("tsSamplerInfo"+$i+".flippedNormal") ("tsCondition"+$i+".firstTerm");
+	connectAttr -f ("ts"+$i+"Side1.result") ("tsCondition"+$i+".colorIfTrue");
+	connectAttr -f ("ts"+$i+"Side2.result") ("tsCondition"+$i+".colorIfFalse");
+	
+	//set mia mat colors
+	setAttr ("ts"+$i+"Side1.diffuse") -type double3 0 0 1;
+	setAttr ("ts"+$i+"Side2.diffuse") -type double3 1 0 0;
+	
+	print ($i+"/n");
+	$i++;
+	print ($i+"/n");
+	
+    pickWalk -d down;
+    sets -edit -forceElement ("twoSided"+$iAfter+"SG") $currentSelection;
+	
+}
+*/
+
+global proc makeBlackMall()
+{
+    
+    $createBlackMatte = 1;
+    string $presentShaders[] = `ls -mat`;
+
+    for ($blackMatteNode in $presentShaders)
+    {
+        
+        if ($blackMatteNode == "BlackMatte")
+            $createBlackMatte = 0;
+    }
+    switch ($createBlackMatte)
+    {
+        
+        case 0:
+            print "BlackMatte already exists\n";
+            break;
+            
+        case 1:
+	    shadingNode -asShader surfaceShader -n "BlackMatte";
+	    sets -renderable true -noSurfaceShader true -empty -name blackMatteSG;
+	    connectAttr -f BlackMatte.outColor blackMatteSG.surfaceShader;
+	    setAttr "BlackMatte.outColor" -type double3 0 0 0;
+	    setAttr "BlackMatte.outMatteOpacity" -type double3 0 0 0;
+	    
+            break;
+    }
+    
+    //string $allShapes[] = `ls -dag -leaf`;
+    string $allShapes[] = `ls -dag`;
+    pickWalk -d down;
+    sets -edit -forceElement blackMatteSG $allShapes;
+    //sets -edit -forceElement blackMatteSG $currentSelection;
+    
+}    
+global proc makeAOSall()
+{
+    
+    $createAO = 1;
+    string $presentShaders[] = `ls -mat`;
+    
+    for ($aoNode in $presentShaders)
+    {
+        
+        if ($aoNode == "AO")
+            $createAO = 0;
+    }
+        switch ($createAO)
+    {
+	
+	case 0:
+	    print "AO Shader already exists\n";
+	    break;
+	    
+	case 1:
+	    shadingNode -asShader surfaceShader -n "AO";
+	    
+	    shadingNode -asTexture mib_amb_occlusion -n "renderLayerAO";
+	    
+	    sets -renderable true -noSurfaceShader true -empty -name aoSG;
+	    connectAttr -f AO.outColor aoSG.surfaceShader;
+	    connectAttr -force renderLayerAO.outValue AO.outColor;
+	    
+	    setAttr "renderLayerAO.samples" 128;
+	    setAttr "renderLayerAO.max_distance" 100;
+	
+	    break;
+    }
+        
+    //string $allShapes[] = `ls -dag -leaf`;
+    string $allShapes[] = `ls -dag`;
+    pickWalk -d down;
+    sets -edit -forceElement aoSG $allShapes;
+    //sets -edit -forceElement aoSG $currentSelection;    
+} 
+
+global proc makePPSall()
+{
+    
+    $createPointPosition = 1;
+    string $presentShaders[] = `ls -mat`;
+    
+    for ($ppNode in $presentShaders)
+    {
+        
+        if ($ppNode == "PointPosition")
+            $createPointPosition = 0;
+    }
+    switch ($createPointPosition)
+    {
+	
+	case 0:
+	    print "Point Position Shader already exists\n";
+	    break;
+	    
+	case 1:
+	    shadingNode -asShader surfaceShader -n "PointPosition";
+	    shadingNode -asUtility samplerInfo -n "ppSamplerInfo";
+	    sets -renderable true -noSurfaceShader true -empty -name pointPositionSG;
+	    connectAttr -f PointPosition.outColor pointPositionSG.surfaceShader;
+	    connectAttr -f ppSamplerInfo.pointWorld PointPosition.outColor;
+	    
+	    break;
+    }
+    
+    //string $allShapes[] = `ls -dag -leaf`;
+    string $allShapes[] = `ls -dag`;
+    
+    pickWalk -d down;
+    //sets -edit -forceElement pointPositionSG $currentSelection;
+    sets -edit -forceElement pointPositionSG $allShapes;
+    
+}
+
+global proc selectAll()
+{
+	
+	select -all;
+}
+
+global proc dfLamb()
+{
+	
+	//initialShadingGroup   
+    string $allShapes[] = `ls -type shape`;
+    
+    pickWalk -d down;
+    sets -edit -forceElement initialShadingGroup $allShapes;
+	
+}
+
+global proc dfMIAXtoAll()
+{
+	
+	makeDfMIAXP;
+	
+	//initialShadingGroup   
+    string $allShapes[] = `ls -type shape`;
+    
+    pickWalk -d down;
+    sets -edit -forceElement default_miaXSG $allShapes;
+	
+}
+
+
+global proc pastedPrefix()
+{
+    
+    string $pasted[] = `ls "pasted__*"`;
+    string $object;
+    for ( $object in $pasted )
+    {
+        string $elements[];
+    // The values returned by ls may be full or partial dag
+    // paths - when renaming we only want the actual
+    // object name so strip off the leading dag path.
+    //
+        tokenize( $object, "|", $elements );
+        string $stripped = $elements[ `size $elements` - 1 ];
+    
+    // Remove the 'pasted__' suffix from the name
+    //
+        $stripped = `substitute "pasted__" $stripped ""`;
+    
+    // When renaming a transform its shape will automatically be
+    // be renamed as well. Use catchQuiet here to ignore errors
+    // when trying to rename the child shape a second time.
+    // 
+        catchQuiet(`evalEcho("rename " + $object + " " + $stripped)`);
+    }    
+
+}
+
+global proc renderSetup()
+{
+    
+	if (!(`pluginInfo -q -l OpenEXRLoader`))
+	{
+		loadPlugin OpenEXRLoader;
+	}
+	
+	
+	//Common tab
+	setAttr "defaultRenderGlobals.currentRenderer" -type "string" "mentalRay";
+	setAttr "defaultResolution.aspectLock" 1;
+	setAttr "defaultResolution.width" 400;
+	setAttr "defaultResolution.height" 300;
+	setAttr "defaultResolution.imageSizeUnits" 0;
+	setAttr "defaultResolution.dotsPerInch" 72;
+	//setAttr "defaultResolution.deviceAspectRatio" 1.777;
+	setAttr "defaultResolution.pixelAspect" 1;
+	setAttr "defaultRenderGlobals.enableDefaultLight" 0;
+	setAttr "defaultRenderGlobals.imageFilePrefix" -type "string" "<Camera>/<RenderLayer>/<RenderLayer>";
+	setAttr "defaultRenderGlobals.imageFormat" 51;
+	setAttr "defaultRenderGlobals.imfPluginKey" -type "string" "exr";
+	setAttr "defaultRenderGlobals.animation" yes;
+	setAttr "defaultRenderGlobals.extensionPadding" 4;
+	setAttr "defaultRenderGlobals.outFormatControl" 0;
+	setAttr "defaultRenderGlobals.outFormatExt" -type "string" "";
+	setAttr "defaultRenderGlobals.useMayaFileName" yes;
+	setAttr "defaultRenderGlobals.useFrameExt" no;
+	setAttr "defaultRenderGlobals.putFrameBeforeExt" yes;
+	setAttr "defaultRenderGlobals.periodInExt" 1;
+	setAttr "defaultRenderGlobals.animationRange" 1;
+	setAttr "defaultRenderGlobals.byFrameStep" 1;
+	setAttr miDefaultFramebuffer.datatype 16;
+	
+	//Passes tab
+	//Features tab
+
+	setAttr "miDefaultOptions.minSamples" 0;
+	setAttr "miDefaultOptions.maxSamples" 2;
+	setAttr "miDefaultOptions.filter" 3;
+	setAttr "miDefaultOptions.filterWidth" 1;
+	setAttr "miDefaultOptions.filterHeight" 1;
+	setAttr "miDefaultOptions.scanline" 0;
+	setAttr "miDefaultOptions.rayTracing" yes;
+	setAttr "miDefaultOptions.maxReflectionRays" 4;
+	setAttr "miDefaultOptions.maxRefractionRays" 4;
+	setAttr "miDefaultOptions.maxRayDepth" 8;
+	setAttr "miDefaultOptions.maxShadowRayDepth" 2;
+	setAttr miDefaultOptions.contrastR 0.1;
+	setAttr miDefaultOptions.contrastG 0.1;
+	setAttr miDefaultOptions.contrastB 0.1;
+	setAttr miDefaultOptions.contrastA 0.1;
+	setAttr "miDefaultFramebuffer.gamma" 1;
+	
+	
+	
+	/*
+	setAttr ".aspectLock" no;
+	setAttr ".lockDeviceAspectRatio" no;
+	setAttr ".width" 400;
+	setAttr ".height" 300;
+	setAttr ".imageSizeUnits" 0;
+	setAttr ".dotsPerInch" 72;
+	setAttr ".pixelDensityUnits" 0;
+	setAttr ".deviceAspectRatio" 1.3333333730697632;
+	setAttr ".pixelAspect" 1;
+	setAttr ".caching" no;
+	setAttr ".isHistoricallyInteresting" 2;
+	setAttr ".nodeState" 0;
+	setAttr ".binMembership" -type "string" "";
+	setAttr ".datatype" 16;
+	setAttr ".interpolateSamples" yes;
+	setAttr ".desaturate" no;
+	setAttr ".premultiply" yes;
+	setAttr ".dither" yes;
+	setAttr ".field" 0;
+	setAttr ".gamma" 1;
+	setAttr ".colorclip" 2;
+	setAttr ".contourEnable" no;
+	setAttr ".contourSamples" 1;
+	setAttr ".contourFilter" 0;
+	setAttr ".contourFilterSupport" 1;
+	setAttr ".contourClearImage" no;
+	setAttr ".contourClearColor" -type "float3" 0 0 0 ;
+	setAttr ".caching" no;
+	setAttr ".isHistoricallyInteresting" 2;
+	setAttr ".nodeState" 0;
+	setAttr ".binMembership" -type "string" "";
+	setAttr ".versions" -type "string" "";
+	setAttr ".links" -type "string" "";
+	setAttr ".includes" -type "string" "";
+	setAttr ".useRenderRegions" no;
+	setAttr ".renderMode" 0;
+	setAttr ".renderThreads" 4;
+	setAttr ".renderVerbosity" 2;
+	setAttr ".inheritVerbosity" yes;
+	setAttr ".topRegion" 256;
+	setAttr ".bottomRegion" 0;
+	setAttr ".leftRegion" 0;
+	setAttr ".rightRegion" 256;
+	setAttr ".shadowsObeyLightLinking" yes;
+	setAttr ".shadowsObeyShadowLinking" no;
+	setAttr ".photonsObeyLightLinking" no;
+	setAttr ".renderShadersWithFiltering" yes;
+	setAttr ".defaultFilterSize" 9.9999997473787516e-05;
+	setAttr ".fieldExtControl" 0;
+	setAttr ".oddFieldExt" -type "string" "";
+	setAttr ".evenFieldExt" -type "string" "";
+	setAttr ".useFrameExt" no;
+	setAttr ".imageCompression" 1;
+	setAttr ".compressionQuality" 0;
+	setAttr ".frameBufferMode" 1;
+	setAttr ".accelerationMethod" 4;
+	setAttr ".bspSize" 10;
+	setAttr ".bspDepth" 40;
+	setAttr ".bspShadow" no;
+	setAttr ".gridResolution" 2;
+	setAttr ".gridAuto" yes;
+	setAttr ".gridMaxSize" 128;
+	setAttr ".gridDepth" 2;
+	setAttr ".tabWidth" 4;
+	setAttr ".exportUsingApi" no;
+	setAttr ".exportBinary" no;
+	setAttr ".exportVerbosity" 3;
+	setAttr ".exportMessages" yes;
+	setAttr ".exportExactHierarchy" no;
+	setAttr ".exportVisibleOnly" yes;
+	setAttr ".exportAssignedOnly" yes;
+	setAttr ".exportFullDagpath" no;
+	setAttr ".exportShapeDeformation" yes;
+	setAttr ".exportObjectsOnDemand" no;
+	setAttr ".exportPlaceholderSize" 0;
+	setAttr ".exportTexturesFirst" no;
+	setAttr ".exportIgnoreErrors" no;
+	setAttr ".exportStateShader" yes;
+	setAttr ".exportLightLinker" no;
+	setAttr ".exportShadowLinker" no;
+	setAttr ".exportInstanceLights" yes;
+	setAttr ".exportInstanceShadows" yes;
+	setAttr ".exportMayaOptions" yes;
+	setAttr ".exportStartupFile" no;
+	setAttr ".exportPolygonDerivatives" yes;
+	setAttr ".mayaDerivatives" no;
+	setAttr ".smoothPolygonDerivatives" no;
+	setAttr ".exportNurbsDerivatives" yes;
+	setAttr ".exportSubdivDerivatives" yes;
+	setAttr ".exportSharedVertices" yes;
+	setAttr ".exportTriangles" yes;
+	setAttr ".exportParticles" yes;
+	setAttr ".exportParticleInstances" yes;
+	setAttr ".exportFluids" yes;
+	setAttr ".exportHair" 2;
+	setAttr ".exportPostEffects" yes;
+	setAttr ".exportVertexColors" no;
+	setAttr ".exportAssembly" yes;
+	setAttr ".optimizeAnimateDetection" yes;
+	setAttr ".optimizeVisibleDetection" yes;
+	setAttr ".optimizeRaytraceShadows" yes;
+	setAttr ".shadowEffectsWithPhotons" no;
+	setAttr ".passAlphaThrough" yes;
+	setAttr ".passDepthThrough" no;
+	setAttr ".passLabelThrough" no;
+	setAttr ".exportCustom" yes;
+	setAttr ".exportCustomAssigned" yes;
+	setAttr ".exportCustomColors" yes;
+	setAttr ".exportCustomData" yes;
+	setAttr ".exportCustomMotion" no;
+	setAttr ".exportMotionOffset" 0.5;
+	setAttr ".exportMotionOutput" 0;
+	setAttr ".exportMotionCamera" yes;
+	setAttr ".exportMotionSegments" yes;
+	setAttr ".exportCustomVectors" yes;
+	setAttr ".includePath" -type "string" "";
+	setAttr ".libraryPath" -type "string" "";
+	setAttr ".texturePath" -type "string" "";
+	setAttr ".projectPath" -type "string" "";
+	setAttr ".outputPath" -type "string" "images";
+	setAttr ".imageFilePath" -type "string" "sourceimages";
+	setAttr ".shadowMapPath" -type "string" "shadowMap";
+	setAttr ".photonMapPath" -type "string" "photonMap";
+	setAttr ".finalgMapPath" -type "string" "finalgMap";
+	setAttr ".lightMapPath" -type "string" "lightMap";
+	setAttr ".previewAnimation" no;
+	setAttr ".previewMotionBlur" yes;
+	setAttr ".previewLayerPasses" no;
+	setAttr ".previewFinalGatherTiles" yes;
+	setAttr ".previewCustom" no;
+	setAttr ".previewProgress" yes;
+	setAttr ".previewRenderTiles" yes;
+	setAttr ".previewConvertTiles" yes;
+	setAttr ".previewTonemapTiles" yes;
+	setAttr ".tonemapRangeLow" 0;
+	setAttr ".tonemapRangeHigh" 1;
+	setAttr ".previewRegion" no;
+	setAttr ".previewTopRegion" 256;
+	setAttr ".previewBottomRegion" 0;
+	setAttr ".previewLeftRegion" 0;
+	setAttr ".previewRightRegion" 256;
+	setAttr ".previewFlags" 0;
+	setAttr ".previewResolutionX" 0;
+	setAttr ".previewResolutionY" 0;
+	setAttr ".useLegacyShaders" no;
+	setAttr ".caching" no;
+	setAttr ".isHistoricallyInteresting" 2;
+	setAttr ".nodeState" 0;
+	setAttr ".binMembership" -type "string" "";
+	setAttr ".contrastR" 0.10000000149011612;
+	setAttr ".contrastG" 0.10000000149011612;
+	setAttr ".contrastB" 0.10000000149011612;
+	setAttr ".contrastA" 0.10000000149011612;
+	setAttr ".sampleLock" yes;
+	setAttr ".minSamples" 0;
+	setAttr ".maxSamples" 2;
+	setAttr ".minObjectSamples" -128;
+	setAttr ".maxObjectSamples" 127;
+	setAttr ".filter" 3;
+	setAttr ".filterWidth" 1;
+	setAttr ".filterHeight" 1;
+	setAttr ".jitter" no;
+	setAttr ".scanline" 0;
+	setAttr ".rapidSamplesCollect" 0;
+	setAttr ".rapidSamplesMotion" 1;
+	setAttr ".rapidSamplesShading" 1;
+	setAttr ".rayTracing" yes;
+	setAttr ".maxReflectionRays" 4;
+	setAttr ".maxRefractionRays" 4;
+	setAttr ".maxRayDepth" 8;
+	setAttr ".maxReflectionBlur" 1;
+	setAttr ".maxRefractionBlur" 1;
+	setAttr ".allocateOnHeap" no;
+	setAttr ".maxShadowRayDepth" 2;
+	setAttr ".shadowMethod" 1;
+	setAttr ".shadowMaps" 1;
+	setAttr ".rebuildShadowMaps" 1;
+	setAttr ".motionBlurShadowMaps" yes;
+	setAttr ".traceShadowMaps" no;
+	setAttr ".windowShadowMaps" no;
+	setAttr ".biasShadowMaps" 0;
+	setAttr ".motionBlur" 0;
+	setAttr ".forceMotionVectors" no;
+	setAttr ".motionBlurBy" 1;
+	setAttr ".motionSteps" 1;
+	setAttr ".shutter" 1;
+	setAttr ".shutterDelay" 0;
+	setAttr ".timeContrastR" 0.20000000298023224;
+	setAttr ".timeContrastG" 0.20000000298023224;
+	setAttr ".timeContrastB" 0.20000000298023224;
+	setAttr ".timeContrastA" 0.20000000298023224;
+	setAttr ".caustics" no;
+	setAttr ".causticsGenerating" 0;
+	setAttr ".causticsReceiving" 0;
+	setAttr ".causticFilterType" 0;
+	setAttr ".causticFilterKernel" 1.1000000238418579;
+	setAttr ".causticAccuracy" 100;
+	setAttr ".causticRadius" 0;
+	setAttr ".causticAutoRadius" no;
+	setAttr ".causticScaleA" 1;
+	setAttr ".causticScale" -type "float3" 1 1 1 ;
+	setAttr ".causticMerge" 0;
+	setAttr ".photonVolumeAccuracy" 30;
+	setAttr ".photonVolumeRadius" 0;
+	setAttr ".photonVolumeAutoRadius" no;
+	setAttr ".photonAutoVolume" no;
+	setAttr ".photonVolumeScaleA" 1;
+	setAttr ".photonVolumeScale" -type "float3" 1 1 1 ;
+	setAttr ".photonVolumeMerge" 0;
+	setAttr ".maxReflectionPhotons" 5;
+	setAttr ".maxRefractionPhotons" 5;
+	setAttr ".maxPhotonDepth" 5;
+	setAttr ".photonDepthAuto" no;
+	setAttr ".photonMapFilename" -type "string" "";
+	setAttr ".photonMapVisualizer" no;
+	setAttr ".photonMapRebuild" yes;
+	setAttr ".globalIllum" no;
+	setAttr ".globalIllumGenerating" 0;
+	setAttr ".globalIllumReceiving" 0;
+	setAttr ".globalIllumAccuracy" 500;
+	setAttr ".globalIllumRadius" 0;
+	setAttr ".globalIllumAutoRadius" no;
+	setAttr ".globalIllumScaleA" 1;
+	setAttr ".globalIllumScale" -type "float3" 1 1 1 ;
+	setAttr ".globalIllumMerge" 0;
+	setAttr ".finalGather" yes;
+	setAttr ".finalGatherFast" no;
+	setAttr ".finalGatherRays" 100;
+	setAttr ".finalGatherMode" 2;
+	setAttr ".finalGatherMinRadius" 0;
+	setAttr ".finalGatherMaxRadius" 0;
+	setAttr ".finalGatherAutoRadius" no;
+	setAttr ".finalGatherView" no;
+	setAttr ".finalGatherPoints" 10;
+	setAttr ".finalGatherScaleA" 1;
+	setAttr ".finalGatherScale" -type "float3" 1 1 1 ;
+	setAttr ".finalGatherPresampleDensity" 1;
+	setAttr ".finalGatherFilename" -type "string" "";
+	setAttr ".finalGatherMapVisualizer" no;
+	setAttr ".finalGatherRebuild" 1;
+	setAttr ".finalGatherFilter" 0;
+	setAttr ".finalGatherFalloffStart" 0;
+	setAttr ".finalGatherFalloffStop" 0;
+	setAttr ".finalGatherTraceDiffuse" 0;
+	setAttr ".finalGatherTraceReflection" 1;
+	setAttr ".finalGatherTraceRefraction" 1;
+	setAttr ".finalGatherTraceDepth" 2;
+	setAttr ".finalGatherBounceScaleA" 1;
+	setAttr ".finalGatherBounceScale" -type "float3" 1 1 1 ;
+	setAttr ".finalGatherImportance" -1;
+	setAttr ".finalGatherContrastA" 1;
+	setAttr ".finalGatherContrast" -type "float3" 1 1 1 ;
+	setAttr ".diagnoseGrid" 0;
+	setAttr ".diagnoseGridSize" 1;
+	setAttr ".diagnoseSamples" no;
+	setAttr ".diagnosePhoton" 0;
+	setAttr ".diagnosePhotonDensity" 0;
+	setAttr ".diagnoseBsp" 0;
+	setAttr ".diagnoseFinalg" no;
+	setAttr ".lightMaps" yes;
+	setAttr ".lightMapsNetwork" yes;
+	setAttr ".lensShaders" yes;
+	setAttr ".volumeShaders" yes;
+	setAttr ".geometryShaders" yes;
+	setAttr ".outputShaders" yes;
+	setAttr ".mergeSurfaces" yes;
+	setAttr ".autoVolume" no;
+	setAttr ".renderHair" yes;
+	setAttr ".renderPasses" yes;
+	setAttr ".lightmapRender" yes;
+	setAttr ".displacementShaders" yes;
+	setAttr ".displacePresample" yes;
+	setAttr ".maxDisplace" 0;
+	setAttr ".faces" 2;
+	setAttr ".volumeSamples" 1;
+	setAttr ".luminance" -type "float3" 0 0 0 ;
+	setAttr ".hardware" 0;
+	setAttr ".hardwareCg" yes;
+	setAttr ".hardwareGL" yes;
+	setAttr ".hardwareFast" yes;
+	setAttr ".hardwareForce" no;
+	setAttr ".userFrameBuffer0Mode" 0;
+	setAttr ".userFrameBuffer0Type" 2;
+	setAttr ".userFrameBuffer1Mode" 0;
+	setAttr ".userFrameBuffer1Type" 2;
+	setAttr ".userFrameBuffer2Mode" 0;
+	setAttr ".userFrameBuffer2Type" 2;
+	setAttr ".userFrameBuffer3Mode" 0;
+	setAttr ".userFrameBuffer3Type" 2;
+	setAttr ".userFrameBuffer4Mode" 0;
+	setAttr ".userFrameBuffer4Type" 2;
+	setAttr ".userFrameBuffer5Mode" 0;
+	setAttr ".userFrameBuffer5Type" 2;
+	setAttr ".userFrameBuffer6Mode" 0;
+	setAttr ".userFrameBuffer6Type" 2;
+	setAttr ".userFrameBuffer7Mode" 0
+	setAttr ".userFrameBuffer7Type" 2;
+	setAttr ".contourBackground" no;
+	setAttr ".enableContourColor" yes;
+	setAttr ".contourColor" -type "float3" 0 0 0 ;
+	setAttr ".contourPriIdx" no;
+	setAttr ".contourPriData" no;
+	setAttr ".contourInstance" no;
+	setAttr ".contourMaterial" no;
+	setAttr ".contourLabel" no;
+	setAttr ".enableContourDist" yes;
+	setAttr ".contourDist" 0;
+	setAttr ".enableContourDepth" yes;
+	setAttr ".contourDepth" 0;
+	setAttr ".enableContourNormal" yes;
+	setAttr ".contourNormal" 0;
+	setAttr ".contourNormalGeom" no;
+	setAttr ".contourInvNormal" no;
+	setAttr ".enableContourTexUV" yes;
+	setAttr ".contourTexU" 0
+	setAttr ".contourTexV" 0;
+	setAttr ".description" -type "string" "";
+	setAttr ".currentRenderer" -type "string" "mentalRay";
+	setAttr ".imageFilePrefix" -type "string" "<Camera>/<RenderLayer>/<RenderLayer>";
+	setAttr ".imageFormat" 51;
+	setAttr ".imfPluginKey" -type "string" "exr";
+	setAttr ".animation" yes;
+	setAttr ".extensionPadding" 4;
+	setAttr ".outFormatControl" 0;
+	setAttr ".outFormatExt" -type "string" "";
+	setAttr ".useMayaFileName" yes;
+	setAttr ".useFrameExt" no;
+	setAttr ".putFrameBeforeExt" yes;
+	setAttr ".periodInExt" 1;
+	setAttr ".renderVersion" -type "string" "";
+	setAttr ".animationRange" 1;
+
+	
+	setAttr ".byFrameStep" 1;
+	setAttr ".modifyExtension" no;
+	setAttr ".startExtension" 1;
+	setAttr ".byExtension" 1;
+	setAttr ".enableDefaultLight" no;
+	setAttr ".preMel" -type "string" "";
+	setAttr ".postMel" -type "string" "";
+	setAttr ".preRenderLayerMel" -type "string" "";
+	setAttr ".postRenderLayerMel" -type "string" "";
+	setAttr ".preRenderMel" -type "string" "";
+	setAttr ".postRenderMel" -type "string" "";
+	setAttr ".renderLayerEnable" no;
+	setAttr ".multiCamNamingMode" 0;
+	setAttr ".bufferName" -type "string" "<RenderPassType>:<RenderPass>.<Camera>";	
+	*/
+
+	////////////////
+	//Set lens Shader to linear
+	
+
+
+}
+
+global proc lensShaderGamma()
+{
+	setAttr "mia_exposure_simple1.gamma" 1;
+}
+
+/*
+global proc makeRLMatte()
+{
+	
+	//make rl with all objects in scene
+    string $allShapes[] = `ls -type shape`;
+	createRenderLayer -name MatteLayer $allShapes;
+	
+	//make empty rl
+	createRenderLayer -name MatteLayer;
+	
+	//add all objects to renderlayer
+	
+	
+	//list all renderlayers	
+	string $allRndrLayers[]=`ls -type renderLayer`;
+
+	
+	
+	
+	//find filename and strip off extension
+	string $fileName = `file -q  -sceneName -shortName`;
+	$fileName = substituteAllString($fileName, ".ma", "");
+
+	//find the number in the name
+	string $stringNumber = match "[0-9]+" $fileName;
+	
+	int $fileNumber;
+	
+	if ($stringNumber == "")
+	{
+		$fileNumber = 2;
+	}
+	else
+	{
+		
+	int $fileNumber = $stringNumber;
+	$fileNumber ++;
+	$fileName = substituteAllString ($fileName, $stringNumber, "");
+		
+	}
+	
+	
+	//int $myCounter;
+	//$myCounter = $myCounter + 1;
+	
+	//set the file name as temp
+	file -rename ("temp" + $fileNumber + ".ma")
+	
+	//save it as mayaAscii
+	file -save -type "mayaAscii";
+	
+}
+*/
+/*
+global proc makeRLPP()
+{
+	createRenderLayer -name PointPosition;
+}
+
+global proc makeRLAO()
+{
+	createRenderLayer -name AO;
+}
+*/
+
+global proc makeRLPPAll()
+{
+	$createPPRL = 1;
+    string $allRndrLayers[]=`ls -type renderLayer`;
+
+    for ($PPrl in $allRndrLayers)
+    {
+        
+        if ($PPrl == "PPLayer")
+            $createPPRL = 0;
+    }
+    switch ($createPPRL)
+    {
+        
+        case 0:
+            print "PointPosition RenderLayer already exists\n";
+			
+			break;
+            
+        case 1:
+			createRenderLayer -name "PPLayer" -global;
+
+			//Add RenderPass				    
+			createNode renderPass;
+			rename "renderPass1" "PPBeauty";
+			connectAttr -nextAvailable PPLayer.renderPass PPBeauty.owner;
+			setRenderPassType -type "BEAUTY" PPBeauty;
+			setAttr "PPBeauty.numChannels" 4;
+			setAttr "PPBeauty.frameBufferType" 256;
+			setAttr "PPBeauty.filtering" 0;
+			setAttr -type "string" PPBeauty.passGroupName "Beauties";
+			
+			
+			//select renderlayer
+
+			//execute previous process
+			makePPSall;
+			
+            break;
+    }
+	
+}
+
+global proc makeRLAOAll()
+{
+	$createAORL = 1;
+    string $allRndrLayers[]=`ls -type renderLayer`;
+
+    for ($AOrl in $allRndrLayers)
+    {
+        
+        if ($AOrl == "AmbOccLayer")
+            $createAORL = 0;
+    }
+    switch ($createAORL)
+    {
+        
+        case 0:
+            print "Ambient Occlusion RenderLayer already exists\n";
+		
+			break;
+            
+        case 1:
+			createRenderLayer -name "AmbOccLayer" -global;
+			
+			//select renderlayer
+
+			//execute previous process
+			
+			makeAOSall;
+			
+            break;
+    }
+	
+}
+
+global proc addMasterPasses()
+{
+	
+	//Setup renderLayers
+	createNode renderPass;
+	rename "renderPass1" "masterDepthRemapped";
+	setRenderPassType -type "CAMZ" cameraDepth;
+	//setAttr "masterDepthRemapped.remap" 1;
+	setAttr -type "string" masterDepthRemapped.passGroupName "CGPost";
+
+	createNode renderPass;
+	rename "renderPass1" "masterDiffuseMaterialColor";
+	setRenderPassType -type "DIFRAW" masterDiffuseMaterialColor;
+	setAttr masterDiffuseMaterialColor.frameBufferType 256;
+	setAttr -type "string" masterDiffuseMaterialColor.passGroupName "Illumination";
+
+	createNode renderPass;
+	rename "renderPass1" "masterIncandescence";
+	setRenderPassType -type "INC" masterIncandescence;
+	setAttr masterIncandescence.frameBufferType 256;
+	setAttr -type "string" masterIncandescence.passGroupName "Illumination";
+	
+	createNode renderPass;
+	rename "renderPass1" "masterIndirect";
+	setRenderPassType -type "INDIRR" masterIndirect;
+	setAttr masterIndirect.frameBufferType 256;
+	setAttr -type "string" masterIndirect.passGroupName "Illumination";
+	
+	createNode renderPass;
+	rename "renderPass1" "masterNormalWorld";
+	setRenderPassType -type "NORMAL" masterNormalWorld;
+	setAttr "masterNormalWorld.space" 0;
+	setAttr -type "string" masterNormalWorld.passGroupName "CGPost";
+
+	createNode renderPass;
+	rename "renderPass1" "masterShadowRaw";
+	setRenderPassType -type "SHDRAW" masterShadowRaw;
+	setAttr masterShadowRaw.frameBufferType 256;
+	setAttr -type "string" masterShadowRaw.passGroupName "Illumination";
+	
+	createNode renderPass;
+	rename "renderPass1" "masterReflection";
+	setRenderPassType -type "REFL" masterReflection;
+	setAttr masterReflection.frameBufferType 256;
+	setAttr -type "string" masterReflection.passGroupName "Illumination";
+	
+	createNode renderPass;
+	rename "renderPass1" "masterRefraction";
+	setRenderPassType -type "REFR" masterRefraction;
+	setAttr masterRefraction.frameBufferType 256;
+	setAttr -type "string" masterRefraction.passGroupName "Illumination";
+	
+	createNode renderPass;
+	rename "renderPass1" "masterShadow";	
+	setRenderPassType -type "SHD" masterShadow;
+	setAttr masterShadow.frameBufferType 256;
+	setAttr -type "string" masterShadow.passGroupName "Illumination";
+
+	createNode renderPass;
+	rename "renderPass1" "masterSpecular";
+	setRenderPassType -type "SPEC" masterSpecular;
+	setAttr masterSpecular.frameBufferType 256;
+	setAttr -type "string" masterSpecular.passGroupName "Illumination";	
+	
+	//assign to Master Layer
+	connectAttr -nextAvailable defaultRenderLayer.renderPass masterDepthRemapped.owner;
+	connectAttr -nextAvailable defaultRenderLayer.renderPass masterDiffuseMaterialColor.owner;
+	connectAttr -nextAvailable defaultRenderLayer.renderPass masterIncandescence.owner;
+	connectAttr -nextAvailable defaultRenderLayer.renderPass masterIndirect.owner;
+	connectAttr -nextAvailable defaultRenderLayer.renderPass masterNormalWorld.owner;
+	connectAttr -nextAvailable defaultRenderLayer.renderPass masterReflection.owner; 
+	connectAttr -nextAvailable defaultRenderLayer.renderPass masterRefraction.owner;
+	connectAttr -nextAvailable defaultRenderLayer.renderPass masterShadow.owner;
+	connectAttr -nextAvailable defaultRenderLayer.renderPass masterShadowRaw.owner;
+	connectAttr -nextAvailable defaultRenderLayer.renderPass masterSpecular.owner;
+
+
+	//motion vectors on a separate layer
+
+	$createMVRL = 1;
+    string $allRndrLayers[]=`ls -type renderLayer`;
+
+    for ($MVrl in $allRndrLayers)
+    {
+        
+        if ($MVrl == "MotionVectors")
+            $createMVRL = 0;
+    }
+    switch ($createMVRL)
+    {
+        
+        case 0:
+            print "Motion Vector RenderLayer already exists\n";
+		
+			break;
+            
+        case 1:
+			createRenderLayer -name MotionVectors -global;
+			
+			//select renderlayer
+
+			//execute previous process
+			
+			createNode renderPass;
+			rename "renderPass1" "mv2DToxik";
+			setRenderPassType -type "MV2E" mv2DToxik;
+			setAttr -type "string" mv2DToxik.passGroupName "CGPost";
+
+			createNode renderPass;
+			rename "renderPass1" "mv3D";
+			setRenderPassType -type "MV3" mv3D;
+			setAttr -type "string" mv3D.passGroupName "CGPost";
+
+			createNode renderPass;
+			rename "renderPass1" "mv2DNormRemap";
+			setRenderPassType -type "MV2N" mv2DNormRemap;
+			setAttr -type "string" mv2DNormRemap.passGroupName "CGPost";
+
+
+			connectAttr -nextAvailable MotionVectors.renderPass mv2DNormRemap.owner;
+			connectAttr -nextAvailable MotionVectors.renderPass mv2DToxik.owner;
+			connectAttr -nextAvailable MotionVectors.renderPass mv3D.owner;
+			
+			makeBlackMall;
+			
+            break;
+    }
+	
+}
+
+
+
+//Create new layer
+//Checkbox for adding all geometry
+//Autoadd material
+//Name layer:
+//PointPosition
+//AO
+//Matte
+//Prepare scene for FBX
+//delete everything but the cameras
+//bake camera animation
