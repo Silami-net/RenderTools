@@ -1,4 +1,5 @@
 RenderTools is a simple MEL script that helps you set up different utility shaders for renderlayers, such as different mattes, ambient occlusion, pointposition. It also contains a setup for a double sided shader.
 
 Put it in your MEL scripts directory, and execute with
-	RenderTools;
+
+source renderTools; renderTools;

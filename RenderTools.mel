@@ -1,16 +1,16 @@
 /*
 =================================
 RenderTools (2011)
-by Sil Bulterman (www.silami.tumblr.com)
+by Sil Bulterman (www.silami.net)
  
 All Rights Reserved.
  
 Your feedback is always appreciated - if you find the script useful or if you have questions, comments, suggestions, requests, bug-reports, if you created an updated version, or to check for updates please contact me at:
-silbulterman@gmail.com
+silami@me.com
 ==================================
 DISCLAIMER: This code is in early alpha stage, so at your own risk. I take no responsibility for any crashes or data loss whatsoever.
 ==================================
-INSTALLATION: Copy the script into your Maya script-directory, source in the code, and start it with the "RenderTools;" command. To make a shelfbutton, middle-mousebutton drag "source RenderTools; RenderTools;" to the shelf.
+INSTALLATION: Copy the script into your Maya script-directory, source in the code, and start it with the "RenderTools;" command. To make a shelfbutton, middle-mousebutton drag "source renderTools; renderTools;" to the shelf.
 ==================================
 RELEASE NOTES:
 v0.2:	Added options for creating renderlayers, setting up renderpasses, and several easy tools.
@@ -37,7 +37,7 @@ global proc renderTools()
 	}
 
 //////////////////
-// interface maken
+// interface
 
 	window -rtf 1 -t "RenderTools Beta 0.2.1" -mnb 1 -mxb 1 -w 332 -h 500 toolWindow;
 	scrollLayout -w 332 -h 500 RTScrollLayout;
@@ -1067,9 +1067,6 @@ global proc renderSetup()
 	setAttr ".bufferName" -type "string" "<RenderPassType>:<RenderPass>.<Camera>";	
 	*/
 
-	////////////////
-	//Set lens Shader to linear
-	
 
 
 }
@@ -1351,15 +1348,3 @@ global proc addMasterPasses()
 	
 }
 
-
-
-//Create new layer
-//Checkbox for adding all geometry
-//Autoadd material
-//Name layer:
-//PointPosition
-//AO
-//Matte
-//Prepare scene for FBX
-//delete everything but the cameras
-//bake camera animation
